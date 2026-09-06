@@ -7,7 +7,7 @@ TOKEN = '8880759832:AAFn7b5JRul4_Z8JGusBFRpbFPAMTtZxkKk'
 bot = telebot.TeleBot(TOKEN)
 
 BASE_URL = "https://apk-bot-dmue.onrender.com"
-DOWNLOAD_FOLDER = 'downloads'
+DOWNLOAD_FOLDER = os.path.abspath('downloads')
 
 if not os.path.exists(DOWNLOAD_FOLDER):
     os.makedirs(DOWNLOAD_FOLDER)
@@ -41,11 +41,9 @@ def handle_apk(message):
     except Exception as e:
         bot.reply_to(message, f"एरर आया: {str(e)}")
 
-# Telegram Bot को बैकग्राउंड में चलाने के लिए
 def run_bot():
     bot.infinity_polling()
 
-# Flask App
 app = Flask(__name__)
 
 @app.route('/downloads/<filename>')
@@ -57,10 +55,8 @@ def home():
     return "Bot is running!"
 
 if __name__ == '__main__':
-    # बोट को अलग धागे (thread) में शुरू करना
     t = threading.Thread(target=run_bot)
     t.daemon = True
     t.start()
     
-    # Flask सर्वर को शुरू करना
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
