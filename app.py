@@ -2,12 +2,13 @@ import os
 import base64
 import requests
 import telebot
-from flask import Flask
+from flask import Flask, request
 
 TOKEN = '8880759832:AAFn7b5JRul4_Z8JGusBFRpbFPAMTtZxkKk'
 bot = telebot.TeleBot(TOKEN)
+app = Flask(__name__)
 
-# GitHub की डिटेल्स जो हमने Render के Environment Variables में डाली हैं
+# GitHub की डिटेल्स जो आपने Render के Environment Variables में डाली हैं
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
 GITHUB_REPO = os.environ.get('GITHUB_REPO')
 GITHUB_USERNAME = os.environ.get('GITHUB_USERNAME')
@@ -35,44 +36,37 @@ def handle_apk(message):
         # फाइल को Base64 में बदलना
         encoded_content = base64.b64encode(downloaded_file).decode('utf-8')
 
-        # GitHub API का यूआरएल
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_name}"
-
+        # GitHub API URL (main branch का उपयोग किया गया है)
+        url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{GITHUB_REPO}/contents/{file_name}"
+        
         headers = {
             "Authorization": f"Bearer {GITHUB_TOKEN}",
-            "Accept": "application/vnd.github.v3+json"
+            "Accept": "application/vnd.github+json"
         }
-
+        
         data = {
             "message": f"Upload {file_name} via Telegram Bot",
-            "content": encoded_content
+            "content": encoded_content,
+            "branch": "main"
         }
 
         # GitHub पर फाइल भेजना
         response = requests.put(url, json=data, headers=headers)
 
         if response.status_code in [201, 200]:
-            # GitHub का डायरेक्ट डाउनलोड लिंक (Raw link) बनाना
-            direct_link = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{file_name}"
-            bot.reply_to(message, f"✅ **फाइल GitHub पर सुरक्षित हो गई है!**\n\nइस पर्मानेंट लिंक को कॉपी करके अपने Admin Panel में डालें:\n`{direct_link}`", parse_mode="Markdown")
+            # पर्मानेंट Raw डाउनलोड लिंक बनाना
+            download_url = f"https://raw.githubusercontent.com/{GITHUB_USERNAME}/{GITHUB_REPO}/main/{file_name}"
+            bot.reply_to(message, f"✅ फाइल सफलतापूर्वक अपलोड हो गई है!\n\n🔗 डाउनलोड लिंक:\n{download_url}")
         else:
             error_msg = response.json().get('message', 'Unknown error')
-            bot.reply_to(message, f"GitHub पर अपलोड करने में फेल हो गया: {error_msg}")
+            bot.reply_to(message, f"❌ अपलोड करने में विफल: {error_msg}")
 
     except Exception as e:
-        bot.reply_to(message, f"एरर आया: {str(e)}")
-
-# Render पर बोट और वेब सर्विस चालू रखने के लिए Flask सर्वर
-app = Flask(__name__)
+        bot.reply_to(message, f"❌ एक त्रुटि हुई: {str(e)}")
 
 @app.route('/')
-def home():
-    return "GitHub Bot is running live!"
+def index():
+    return "Bot is running!"
 
-if __name__ == '__main__':
-    import threading
-    t = threading.Thread(target=bot.infinity_polling)
-    t.daemon = True
-    t.start()
-    
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
