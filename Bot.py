@@ -4,7 +4,7 @@ import telebot
 TOKEN = '8880759832:AAFn7b5JRul4_Z8JGusBFRpbFPAMTtZxkKk'
 bot = telebot.TeleBot(TOKEN)
 
-BASE_URL = "https://your-app-name.onrender.com" 
+BASE_URL = "BASE_URL = "https://apk-bot-dmue.onrender.com" 
 
 DOWNLOAD_FOLDER = 'downloads'
 if not os.path.exists(DOWNLOAD_FOLDER):
