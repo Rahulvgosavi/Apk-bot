@@ -1,6 +1,7 @@
 import os
 import threading
 import telebot
+from werkzeug.utils import secure_filename
 from flask import Flask, send_from_directory
 
 TOKEN = '8880759832:AAFn7b5JRul4_Z8JGusBFRpbFPAMTtZxkKk'
@@ -19,15 +20,18 @@ def start_msg(message):
 @bot.message_handler(content_types=['document'])
 def handle_apk(message):
     file_info = message.document
-    file_name = file_info.file_name
+    original_name = file_info.file_name
 
-    if not file_name.endswith('.apk'):
+    if not original_name.endswith('.apk'):
         bot.reply_to(message, "कृपया केवल .apk फाइल ही भेजें!")
         return
 
     bot.reply_to(message, "फाइल प्रोसेस हो रही है, कृपया प्रतीक्षा करें...")
 
     try:
+        # फाइल के नाम से स्पेस और खतरनाक कैरेक्टर हटाना
+        file_name = secure_filename(original_name)
+        
         file_path_info = bot.get_file(file_info.file_id)
         downloaded_file = bot.download_file(file_path_info.file_path)
 
