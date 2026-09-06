@@ -1,65 +1,77 @@
 import os
-import threading
+import base64
+import requests
 import telebot
-from werkzeug.utils import secure_filename
-from flask import Flask, send_from_directory
+from flask import Flask
 
 TOKEN = '8880759832:AAFn7b5JRul4_Z8JGusBFRpbFPAMTtZxkKk'
 bot = telebot.TeleBot(TOKEN)
 
-BASE_URL = "https://apk-bot-dmue.onrender.com"
-DOWNLOAD_FOLDER = os.path.abspath('downloads')
-
-if not os.path.exists(DOWNLOAD_FOLDER):
-    os.makedirs(DOWNLOAD_FOLDER)
+# GitHub की डिटेल्स जो हमने Render के Environment Variables में डाली हैं
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
+GITHUB_REPO = os.environ.get('GITHUB_REPO')
+GITHUB_USERNAME = os.environ.get('GITHUB_USERNAME')
 
 @bot.message_handler(commands=['start'])
 def start_msg(message):
-    bot.reply_to(message, "बोट तैयार है! अपनी .apk फाइल यहाँ भेजें, मैं आपको डायरेक्ट डाउनलोड लिंक दूंगा।")
+    bot.reply_to(message, "बोट तैयार है! अपनी .apk फाइल यहाँ भेजें, मैं इसे सीधे आपके GitHub पर अपलोड करके पर्मानेंट लिंक दूंगा।")
 
 @bot.message_handler(content_types=['document'])
 def handle_apk(message):
     file_info = message.document
-    original_name = file_info.file_name
+    file_name = file_info.file_name
 
-    if not original_name.endswith('.apk'):
+    if not file_name.endswith('.apk'):
         bot.reply_to(message, "कृपया केवल .apk फाइल ही भेजें!")
         return
 
-    bot.reply_to(message, "फाइल प्रोसेस हो रही है, कृपया प्रतीक्षा करें...")
+    bot.reply_to(message, "फाइल GitHub पर अपलोड हो रही है, कृपया प्रतीक्षा करें...")
 
     try:
-        # फाइल के नाम से स्पेस और खतरनाक कैरेक्टर हटाना
-        file_name = secure_filename(original_name)
-        
+        # टेलीग्राम से फाइल डाउनलोड करना
         file_path_info = bot.get_file(file_info.file_id)
         downloaded_file = bot.download_file(file_path_info.file_path)
 
-        local_path = os.path.join(DOWNLOAD_FOLDER, file_name)
-        with open(local_path, 'wb') as new_file:
-            new_file.write(downloaded_file)
+        # फाइल को Base64 में बदलना
+        encoded_content = base64.b64encode(downloaded_file).decode('utf-8')
 
-        direct_link = f"{BASE_URL}/downloads/{file_name}"
-        bot.reply_to(message, f"✅ **लिंक तैयार है!**\n\nइस लिंक को कॉपी करके अपने Admin Panel में डालें:\n`{direct_link}`", parse_mode="Markdown")
+        # GitHub API का यूआरएल
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_name}"
+
+        headers = {
+            "Authorization": f"Bearer {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+
+        data = {
+            "message": f"Upload {file_name} via Telegram Bot",
+            "content": encoded_content
+        }
+
+        # GitHub पर फाइल भेजना
+        response = requests.put(url, json=data, headers=headers)
+
+        if response.status_code in [201, 200]:
+            # GitHub का डायरेक्ट डाउनलोड लिंक (Raw link) बनाना
+            direct_link = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{file_name}"
+            bot.reply_to(message, f"✅ **फाइल GitHub पर सुरक्षित हो गई है!**\n\nइस पर्मानेंट लिंक को कॉपी करके अपने Admin Panel में डालें:\n`{direct_link}`", parse_mode="Markdown")
+        else:
+            error_msg = response.json().get('message', 'Unknown error')
+            bot.reply_to(message, f"GitHub पर अपलोड करने में फेल हो गया: {error_msg}")
 
     except Exception as e:
         bot.reply_to(message, f"एरर आया: {str(e)}")
 
-def run_bot():
-    bot.infinity_polling()
-
+# Render पर बोट और वेब सर्विस चालू रखने के लिए Flask सर्वर
 app = Flask(__name__)
-
-@app.route('/downloads/<filename>')
-def download_file(filename):
-    return send_from_directory(DOWNLOAD_FOLDER, filename, as_attachment=True)
 
 @app.route('/')
 def home():
-    return "Bot is running!"
+    return "GitHub Bot is running live!"
 
 if __name__ == '__main__':
-    t = threading.Thread(target=run_bot)
+    import threading
+    t = threading.Thread(target=bot.infinity_polling)
     t.daemon = True
     t.start()
     
